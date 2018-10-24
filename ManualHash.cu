@@ -53,8 +53,8 @@ class scalaGPUHash
         uint2 hashStashConstants;
         uint32_t tableSize;
         uint32_t fullTableSize;
-	uint32_t maxIterations;
-	uint32_t maxEvict;
+        uint32_t maxIterations;
+        uint32_t maxEvict;
         uint64_t *keys;
         uint32_t *values;
         uint32_t *deviceIndex;
@@ -93,42 +93,49 @@ class scalaGPUHash
 };
 
 __device__ uint32_t hashFunction(uint64_t key, uint2 constants,
-                                                 uint32_t tableSize)
+                                 uint32_t tableSize)
 {
         uint64_t hashKey;
-        hashKey =
-            (((uint64_t)constants.x ^ key + (uint64_t)constants.y) % (uint64_t)BigPrimeDevisor) % (uint64_t)tableSize;
-	//if (hashKey > tableSize){
-	//	printf("in hashfunction hashKey is too bigger,%llu\t%u\n",hashKey,tableSize);
-	//}
+        hashKey = (((uint64_t)constants.x ^ key + (uint64_t)constants.y) %
+                   (uint64_t)BigPrimeDevisor) %
+                  (uint64_t)tableSize;
+        // if (hashKey > tableSize){
+        //	printf("in hashfunction hashKey is too
+        //bigger,%llu\t%u\n",hashKey,tableSize);
+        //}
         return (uint32_t)hashKey;
 }
 
 __device__ uint32_t determineNextLocation(uint64_t *key, uint32_t index,
-                                                 uint32_t NumHashFunctions,
-                                                 uint32_t preLocation,
-                                                 uint2 *constants,
-                                                 uint32_t tableSize)
+                                          uint32_t NumHashFunctions,
+                                          uint32_t preLocation,
+                                          uint2 *constants, uint32_t tableSize)
 {
         uint64_t thisKey = key[index];
-        uint32_t nextLocation = hashFunction(thisKey,constants[0],tableSize);
-        for (int i = NumHashFunctions-2; i >= 0 ; --i) {
-                //nextLocation = (uint32_t)hashFunction(thisKey, constants[i], tableSize);
-		//if (nextLocation > tableSize){
-		//	printf("thisKey %llu\t nextlocation %u\t constants.x constants.y %u\t%u\t%u\n",thisKey,nextLocation,constants[i].x,constants[i].y,i);
-			//return 0xFFFFFFFF;
-		//	}
-		nextLocation = (preLocation == hashFunction(thisKey,constants[i],tableSize) ? hashFunction(thisKey,constants[i+1],tableSize) : nextLocation );
-                //if (preLocation == nextLocation and i != NumHashFunctions-1) {
-                 //       nextLocation=hashFunction(thisKey, constants[i + 1],
-                  //                          tableSize);
-		//	break;
+        uint32_t nextLocation = hashFunction(thisKey, constants[0], tableSize);
+        for (int i = NumHashFunctions - 2; i >= 0; --i) {
+                // nextLocation = (uint32_t)hashFunction(thisKey, constants[i],
+                // tableSize); if (nextLocation > tableSize){ 	printf("thisKey
+                //%llu\t nextlocation %u\t constants.x constants.y
+                //%u\t%u\t%u\n",thisKey,nextLocation,constants[i].x,constants[i].y,i);
+                // return 0xFFFFFFFF;
+                //	}
+                nextLocation =
+                    (preLocation ==
+                             hashFunction(thisKey, constants[i], tableSize)
+                         ? hashFunction(thisKey, constants[i + 1], tableSize)
+                         : nextLocation);
+                // if (preLocation == nextLocation and i != NumHashFunctions-1)
+                // {
+                //       nextLocation=hashFunction(thisKey, constants[i + 1],
+                //                          tableSize);
+                //	break;
                 //}
-		//if (preLocation == nextLocation and i== NumHashFunctions-1){
-		//	nextLocation=hashFunction(thisKey,constants[NumHashFunctions-1],tableSize);
-        	}
-	
-	return nextLocation;
+                // if (preLocation == nextLocation and i== NumHashFunctions-1){
+                //	nextLocation=hashFunction(thisKey,constants[NumHashFunctions-1],tableSize);
+        }
+
+        return nextLocation;
 }
 __global__ void hashInsert(uint64_t *key, uint32_t *index, uint32_t *flag,
                            uint32_t NumOfEntry, uint32_t NumHashFunctions,
@@ -139,47 +146,49 @@ __global__ void hashInsert(uint64_t *key, uint32_t *index, uint32_t *flag,
 
         // uint32_t expectFlag = 0;
         uint32_t targetFlag = 1;
-        uint32_t location=0;
+        uint32_t location = 0;
         uint32_t globaltid = threadIdx.x + blockIdx.x * blockDim.x;
         if (globaltid >= NumOfEntry) {
                 return;
         }
         uint64_t thisKey = key[globaltid];
-	uint32_t thisIndex = globaltid;
+        uint32_t thisIndex = globaltid;
         // calculate all locations first
-	// location is index,store index in flag
+        // location is index,store index in flag
         location = hashFunction(thisKey, constants[0], tableSize);
-	        // for (uint32_t i = 0; i < NumHashFunctions; ++i) {
+        // for (uint32_t i = 0; i < NumHashFunctions; ++i) {
         //       location[i] = hashFunction(thisKey, constants[i], tableSize);
         //}
         for (uint32_t i = 0; i < maxEvict; ++i) {
-		
 
                 // targetFlag = atomicCAS(&flag[location[i]], 1, 0);
-                //thisIndex = atomicCAS(&flag[location], EmptyFlag,thisIndex )
-		thisIndex = atomicExch(&flag[location],thisIndex);
+                // thisIndex = atomicCAS(&flag[location], EmptyFlag,thisIndex )
+                thisIndex = atomicExch(&flag[location], thisIndex);
                 if (thisIndex == EmptyFlag) {
-                        //index[globaltid] = location;
+                        // index[globaltid] = location;
                         break;
                 }
                 location =
                     determineNextLocation(key, thisIndex, NumHashFunctions,
                                           location, constants, tableSize);
-		if (location > tableSize){
-			printf("threadid %d\tthisKey %llu\t location %u\t constants.x constants.y %u\t%u\t%u\n",globaltid,thisKey,location,constants[0].x,constants[0].y,i);
-			
-			break;
-			}
+                if (location > tableSize) {
+                        printf("threadid %d\tthisKey %llu\t location %u\t "
+                               "constants.x constants.y %u\t%u\t%u\n",
+                               globaltid, thisKey, location, constants[0].x,
+                               constants[0].y, i);
+
+                        break;
+                }
         }
         // stash
-        if (thisIndex != EmptyFlag and location==tableSize+1) {
+        if (thisIndex != EmptyFlag and location == tableSize + 1) {
                 uint32_t slot =
                     hashFunction(key[thisIndex], stashConstants[0], stashSize);
                 // targetFlag = atomicCAS(&flag[slot + tableSize], 1, 0);
-                thisIndex=
+                thisIndex =
                     atomicCAS(&flag[slot + tableSize], EmptyFlag, thisIndex);
-                if (thisIndex== EmptyFlag) {
-                        //index[globaltid] = slot + tableSize;
+                if (thisIndex == EmptyFlag) {
+                        // index[globaltid] = slot + tableSize;
                 }
         }
         if (thisIndex != EmptyFlag) {
@@ -207,14 +216,17 @@ inline void scalaGPUHash::resetFlag()
         cudaMemset(deviceFlag, 0xFF, sizeof(uint32_t) * fullTableSize);
 }
 
-unsigned scalaGPUHash::ComputeMaxEvict() {
-	float lg_input_size = (float)(log((float)NumOfEntry)/(spaceUsage));
-	float load_factor = float(NumOfEntry)/tableSize;
-	float ln_load_factor = (float)(log(load_factor))/(log(2.71828183));
-	
-	unsigned maxEvict= (unsigned )(4.0*ceil(-1.0/(0.02855 + 1.1594722 *ln_load_factor)* lg_input_size));
-	return 7*log(NumOfEntry);
+unsigned scalaGPUHash::ComputeMaxEvict()
+{
+        float lg_input_size = (float)(log((float)NumOfEntry) / (spaceUsage));
+        float load_factor = float(NumOfEntry) / tableSize;
+        float ln_load_factor = (float)(log(load_factor)) / (log(2.71828183));
 
+        unsigned maxEvict =
+            (unsigned)(4.0 *
+                       ceil(-1.0 / (0.02855 + 1.1594722 * ln_load_factor) *
+                            lg_input_size));
+        return 7 * log(NumOfEntry);
 }
 
 __global__ void reArrangeIndex(uint32_t *deviceIndex, uint32_t *deviceFlag,
@@ -224,8 +236,8 @@ __global__ void reArrangeIndex(uint32_t *deviceIndex, uint32_t *deviceFlag,
         if (globaltid >= fullTableSize) {
                 return;
         }
-	uint32_t thisIndex = deviceFlag[globaltid];
-        //deviceFlag[deviceIndex[globaltid]] = globaltid;
+        uint32_t thisIndex = deviceFlag[globaltid];
+        // deviceFlag[deviceIndex[globaltid]] = globaltid;
         deviceIndex[thisIndex] = globaltid;
 }
 
@@ -270,11 +282,11 @@ __global__ void retrieve(uint64_t *keys, uint32_t *flags, uint32_t *values,
 int scalaGPUHash::init()
 {
         tableSize = ceil(NumOfEntry * spaceUsage);
-	stashSize = 101;
+        stashSize = 101;
         fullTableSize = tableSize + stashSize;
         hashConstants = new uint2[NumOfHashFunctions];
-	maxIterations = 10;
-	maxEvict = ComputeMaxEvict();
+        maxIterations = 10;
+        maxEvict = ComputeMaxEvict();
         cudaMalloc((void **)&deviceIndex, sizeof(uint32_t) * NumOfEntry);
         cudaMalloc((void **)&deviceKeys, sizeof(uint64_t) * NumOfEntry);
         cudaMalloc((void **)&deviceValues, sizeof(uint32_t) * NumOfEntry);
@@ -347,20 +359,21 @@ int scalaGPUHash::hashBuild()
         resetIndex();
         resetFlag();
         dim3 grid = ComputeGridDim(NumOfEntry);
-	//maxEvict= ComputeMaxEvict();
+        // maxEvict= ComputeMaxEvict();
         for (uint32_t i = 0; i < maxIterations; ++i) {
                 hashInsert<<<grid, kBlockSize>>>(
                     deviceKeys, deviceIndex, deviceFlag, NumOfEntry,
                     NumOfHashFunctions, deviceHashConstants, tableSize,
-                    stashSize, deviceHashStashConstants, buildFailures,maxEvict);
+                    stashSize, deviceHashStashConstants, buildFailures,
+                    maxEvict);
                 cudaDeviceSynchronize();
                 cudaMemcpy(&buildStatus, buildFailures, sizeof(uint32_t),
                            cudaMemcpyDeviceToHost);
                 if (buildStatus == BUILD_SUCCESS) {
-                        //cudaMemset(deviceFlag, 0x00,
-                         //          sizeof(uint32_t) * fullTableSize);
-                        //reArrangeIndex<<<grid, kBlockSize>>>(
-                         //   deviceIndex, deviceFlag, NumOfEntry);
+                        // cudaMemset(deviceFlag, 0x00,
+                        //          sizeof(uint32_t) * fullTableSize);
+                        // reArrangeIndex<<<grid, kBlockSize>>>(
+                        //   deviceIndex, deviceFlag, NumOfEntry);
 
                         return 1;
                 } else {
@@ -369,7 +382,7 @@ int scalaGPUHash::hashBuild()
         }
         if (buildStatus != 0) {
                 printf("Build Failure!!!\n");
-		hashRelease();
+                hashRelease();
                 exit(EXIT_FAILURE);
                 return 0;
         }
@@ -385,8 +398,8 @@ void scalaGPUHash::hashRehash()
                 // reset deviceFlag
                 resetFlag();
                 // reset buildFailures to zero
-		cudaMemset(buildFailures,0x00,sizeof(uint32_t));
-                //buildFailures = 0;
+                cudaMemset(buildFailures, 0x00, sizeof(uint32_t));
+                // buildFailures = 0;
         }
 }
 
