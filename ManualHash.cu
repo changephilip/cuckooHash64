@@ -187,12 +187,12 @@ __global__ void hashInsert(uint64_t *key, uint32_t *index, uint32_t *flag,
                 // targetFlag = atomicCAS(&flag[slot + tableSize], 1, 0);
                 thisIndex =
                     atomicCAS(&flag[slot + tableSize], EmptyFlag, thisIndex);
-                if (thisIndex == EmptyFlag) {
+                //if (thisIndex == EmptyFlag) {
                         // index[globaltid] = slot + tableSize;
-                }
+                //}
         }
         if (thisIndex != EmptyFlag) {
-                index[globaltid] = EmptyIndex;
+                //index[globaltid] = EmptyIndex;
                 atomicAdd(buildFailures, 1);
         }
 #ifdef DEBUG
@@ -374,7 +374,7 @@ int scalaGPUHash::hashBuild()
                         //          sizeof(uint32_t) * fullTableSize);
                         // reArrangeIndex<<<grid, kBlockSize>>>(
                         //   deviceIndex, deviceFlag, NumOfEntry);
-
+                        hashClear();
                         return 1;
                 } else {
                         hashRehash();
@@ -484,7 +484,7 @@ int HashTest()
         scalaGPUHash A(space_usage, NumOfHashFucntions, NumOfEntry, keys,
                        values);
         A.hashBuild();
-        A.hashClear();
+        //A.hashClear();
         A.hashRetrieve(keys, NumOfEntry, retrieve);
 
         float ErrorSum = 0.0f;
